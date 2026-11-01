@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: buildproof-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /api/health
+    envVars:
+      - key: BHARATCODE_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
