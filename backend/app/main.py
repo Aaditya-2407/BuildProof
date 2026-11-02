@@ -115,10 +115,10 @@ async def notices_analyze(
 @app.get("/api/jobs/{job_id}")
 async def job_status(job_id: str):
     if not re.fullmatch(r"[0-9a-f]{32}", job_id):
-        raise HTTPException(404, "Job not found. The service may have restarted; submit the repository again.")
+        raise HTTPException(404, "Job not found. The service may have restarted; submit this analysis again.")
     job = await get_job(job_id)
     if not job:
-        raise HTTPException(404, "Job not found. The service may have restarted; submit the repository again.")
+        raise HTTPException(404, "Job not found. The service may have restarted; submit this analysis again.")
     return job.public()
 
 
