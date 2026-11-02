@@ -4,6 +4,7 @@ export interface Evidence {
   source_type?: string;
   source_name?: string;
   page_number?: number | null;
+  page_count?: number | null;
   line_start: number;
   line_end: number;
   line_count?: number;

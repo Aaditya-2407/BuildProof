@@ -231,7 +231,7 @@ def validate_citations(value: Any, evidence: dict[str, dict[str, Any]]) -> tuple
     """Recursively verify all model-supplied evidence IDs resolve to valid source lines."""
     if isinstance(value, dict):
         for key, child in value.items():
-            if key == "evidence_ids":
+            if key == "evidence_ids" or key.endswith("_evidence_ids"):
                 if not isinstance(child, list):
                     return False, "Evidence references must be a list."
                 for eid in child:
@@ -240,10 +240,19 @@ def validate_citations(value: Any, evidence: dict[str, dict[str, Any]]) -> tuple
                     item = evidence.get(eid)
                     if item is None:
                         return False, f"Unknown evidence ID {eid}."
-                    if (item["line_start"] < 1 or item["line_end"] < item["line_start"]
-                            or item["line_end"] > item.get("line_count", item["line_end"])
+                    line_start = item.get("line_start")
+                    line_end = item.get("line_end")
+                    if (type(line_start) is not int or type(line_end) is not int
+                            or line_start < 1 or line_end < line_start
+                            or line_end > item.get("line_count", line_end)
                             or not item.get("path") or not item.get("excerpt")):
                         return False, f"Invalid source range for {eid}."
+                    if item.get("source_type", "").endswith("_pdf"):
+                        page_number = item.get("page_number")
+                        page_count = item.get("page_count")
+                        if (type(page_number) is not int or page_number < 1
+                                or type(page_count) is not int or page_number > page_count):
+                            return False, f"Invalid PDF page for {eid}."
             else:
                 ok, error = validate_citations(child, evidence)
                 if not ok:

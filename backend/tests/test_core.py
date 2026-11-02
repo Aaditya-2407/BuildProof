@@ -18,6 +18,11 @@ def test_citation_validator_accepts_only_known_source_ranges():
     assert not valid
     assert "Invalid source range" in (error or "")
 
+    for citation_field in ("resume_evidence_ids", "repo_evidence_ids", "documentation_evidence_ids", "code_evidence_ids"):
+        valid, error = validate_citations({citation_field: ["E9999"]}, evidence)
+        assert not valid
+        assert "Unknown evidence ID" in (error or "")
+
 
 def test_secret_values_are_redacted_from_browser_and_model_material():
     secret = "super_secret_token_value_4815162342"

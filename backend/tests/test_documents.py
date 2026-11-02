@@ -6,7 +6,7 @@ import pytest
 from pypdf import PdfWriter
 
 from app import document_analyzers
-from app.analyzer import ModelError
+from app.analyzer import ModelError, validate_citations
 from app.documents import DocumentError, pdf_document, text_document
 from app.scanner import build_fact_sheet
 
@@ -37,8 +37,14 @@ def test_pdf_extraction_keeps_page_and_line_citations():
     document = pdf_document(make_text_pdf("Deadline: 2026-11-10"), "notice.pdf", "notice_pdf", "N1-")
     evidence = document["evidence"][0]
     assert evidence["page_number"] == 1
+    assert evidence["page_count"] == 1
     assert evidence["line_start"] == evidence["line_end"] == 1
     assert "2026-11-10" in evidence["excerpt"]
+    assert validate_citations({"evidence_ids": [evidence["id"]]}, {evidence["id"]: evidence}) == (True, None)
+    invalid_page = {**evidence, "page_number": 2}
+    valid, error = validate_citations({"evidence_ids": [evidence["id"]]}, {evidence["id"]: invalid_page})
+    assert not valid
+    assert "Invalid PDF page" in (error or "")
 
 
 def test_pdf_limits_and_image_only_pdf_errors():
@@ -85,6 +91,22 @@ def test_resume_audit_requires_resume_and_code_evidence_without_unsupported_rewr
     result = document_analyzers.audit_resume(fact_sheet, resume)
     assert [claim["status"] for claim in result["claims"]] == ["supported", "not_found_in_scanned_scope"]
     assert result["claims"][1]["defensible_rewrite"] == ""
+
+    invalid_reference = dict(response)
+    invalid_reference["claims"] = [
+        dict(response["claims"][0], repo_evidence_ids=["E9999"]), response["claims"][1]
+    ]
+    outputs = iter([invalid_reference, response])
+    attempts = []
+
+    def response_then_repair(*args, **kwargs):
+        attempts.append(1)
+        return dict(next(outputs))
+
+    monkeypatch.setattr(document_analyzers, "_request_model", response_then_repair)
+    repaired = document_analyzers.audit_resume(fact_sheet, resume)
+    assert len(attempts) == 2
+    assert repaired["claims"][0]["repo_evidence_ids"] == [repo_evidence["id"]]
 
     bad = dict(response)
     bad["claims"] = [dict(response["claims"][1], defensible_rewrite="Led 10,000 users to success.")]
