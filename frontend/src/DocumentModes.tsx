@@ -50,8 +50,7 @@ function DocumentProgress({ busy, stage, error, onRetry }: { busy: boolean; stag
 
 function ReportActions({ name, markdown, onCalendar }: { name: string; markdown: string; onCalendar?: () => void }) {
   const exportMarkdown = () => {
-    const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
-    const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url);
+    downloadFile(name, markdown, "text/markdown;charset=utf-8");
   };
   return <div className="bp-report-actions">{onCalendar && <button className="secondary-button" onClick={onCalendar}><CalendarDays size={14} />Download calendar</button>}<button className="secondary-button" onClick={exportMarkdown}><Download size={14} />Export Markdown</button><button className="secondary-button" onClick={() => window.print()}><Printer size={14} />Print</button></div>;
 }
@@ -163,15 +162,39 @@ function NoticeResult({ result, id }: { result: NoticeReport; id: string }) {
 }
 
 function downloadCalendar(actions: NoticeAction[]) {
-  const escape = (value: string) => value.replaceAll("\\", "\\\\").replaceAll(";", "\\;").replaceAll(",", "\\,").replaceAll("\n", "\\n");
+  const escape = (value: string) => value.replaceAll("\\", "\\\\").replace(/\r\n|\r|\n/g, "\\n").replaceAll(";", "\\;").replaceAll(",", "\\,");
+  const foldLine = (line: string) => {
+    const encoder = new TextEncoder();
+    const parts: string[] = [];
+    let part = "";
+    let bytes = 0;
+    for (const character of line) {
+      const size = encoder.encode(character).length;
+      if (bytes + size > 75 && part) {
+        parts.push(part);
+        part = " ";
+        bytes = 1;
+      }
+      part += character;
+      bytes += size;
+    }
+    parts.push(part);
+    return parts.join("\r\n");
+  };
   const stamp = new Date().toISOString().replaceAll("-", "").replaceAll(":", "").replace(/\.\d{3}/, "");
   const events = actions.map((action, index) => {
     const start = action.due_date.replaceAll("-", "");
     const next = new Date(`${action.due_date}T00:00:00Z`); next.setUTCDate(next.getUTCDate() + 1);
     const end = next.toISOString().slice(0, 10).replaceAll("-", "");
-    return ["BEGIN:VEVENT", `UID:buildproof-${stamp}-${index}@buildproof`, `DTSTAMP:${stamp}Z`, `DTSTART;VALUE=DATE:${start}`, `DTEND;VALUE=DATE:${end}`, `SUMMARY:${escape(action.action)}`, "END:VEVENT"].join("\r\n");
+    return ["BEGIN:VEVENT", `UID:buildproof-${stamp}-${index}@buildproof`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${start}`, `DTEND;VALUE=DATE:${end}`, `SUMMARY:${escape(action.action)}`, "END:VEVENT"];
   });
-  const content = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//BuildProof//Campus Notices//EN", ...events, "END:VCALENDAR"].join("\r\n");
-  const url = URL.createObjectURL(new Blob([content], { type: "text/calendar;charset=utf-8" }));
-  const anchor = document.createElement("a"); anchor.href = url; anchor.download = "buildproof-campus-actions.ics"; anchor.click(); URL.revokeObjectURL(url);
+  const content = [["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//BuildProof//Campus Notices//EN"], ...events, ["END:VCALENDAR"]]
+    .flat().map(foldLine).join("\r\n");
+  downloadFile("buildproof-campus-actions.ics", content, "text/calendar;charset=utf-8");
+}
+
+function downloadFile(filename: string, content: string, contentType: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: contentType }));
+  const anchor = document.createElement("a"); anchor.href = url; anchor.download = filename; anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
