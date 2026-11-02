@@ -75,9 +75,9 @@ export function App() {
   return <div className="app-shell">
     <header className="topbar"><a className="brand" href="#top" aria-label="BuildProof home"><span className="brand-mark"><ShieldCheck size={18} /></span><span>build<span className="brand-light">proof</span></span></a><div className="topbar-right"><span className="topbar-note"><span className="live-dot" />Evidence for your next move</span><a href="#modes" className="github-link">Choose a mode <ArrowUpRight size={13} /></a></div></header>
     <nav className="mode-nav" id="modes" aria-label="BuildProof modes">
-      <button className={mode === "repo" ? "active" : ""} onClick={() => setMode("repo")}><span>01</span> Defend a repo</button>
-      <button className={mode === "resume" ? "active" : ""} onClick={() => setMode("resume")}><span>02</span> Prove resume claims</button>
-      <button className={mode === "notices" ? "active" : ""} onClick={() => setMode("notices")}><span>03</span> Track campus notices</button>
+      <button aria-pressed={mode === "repo"} className={mode === "repo" ? "active" : ""} onClick={() => setMode("repo")}><span>01</span> Defend a repo</button>
+      <button aria-pressed={mode === "resume"} className={mode === "resume" ? "active" : ""} onClick={() => setMode("resume")}><span>02</span> Prove resume claims</button>
+      <button aria-pressed={mode === "notices"} className={mode === "notices" ? "active" : ""} onClick={() => setMode("notices")}><span>03</span> Track campus notices</button>
     </nav>
     {mode === "repo" && <main id="top">
       <section className="hero" aria-labelledby="hero-title"><div className="hero-grain" /><div className="hero-copy">

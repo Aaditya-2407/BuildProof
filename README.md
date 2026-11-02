@@ -68,5 +68,6 @@ Render free services can spin down. In-memory jobs and caches are lost on restar
 
 ```bash
 cd backend && .venv/bin/pytest -q
+cd frontend && npm test
 cd frontend && npm run build
 ```

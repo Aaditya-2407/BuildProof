@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Download, FileText, LoaderCircle, LockKeyhole, Printer, RefreshCw, Sparkles, Upload } from "lucide-react";
 import { api, type Evidence, type JobStatus, type NoticeAction, type NoticeReport, type ResumeAudit } from "./api";
+import { buildCalendarIcs } from "./calendar";
 import "./DocumentModes.css";
 
 export type BuildMode = "repo" | "resume" | "notices";
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+const charCount = (text: string) => Array.from(text).length;
 const stages: Record<string, string> = {
   queued: "In the queue", resolving_repository: "Finding the latest commit", fetching_archive: "Fetching the public source",
   scanning_files: "Reading the repository", matching_resume_claims: "Checking resume claims against code",
@@ -85,8 +87,8 @@ export function ResumeMode() {
   return <main className="bp-mode-page"><section className="bp-mode-hero"><div className="eyebrow"><span className="eyebrow-line" />RESUME PROOF · CODE-BACKED CLAIMS</div><h1>Make every bullet<br /><em>defensible.</em></h1><p>Compare one resume with one public repo. See what the code supports, what it partly supports, and what this scan cannot verify.</p><div className="bp-mode-tags"><span><CheckCircle2 size={13} /> Evidence-linked</span><span><LockKeyhole size={13} /> No saved resume</span></div></section>
     <section className="bp-form-card"><div className="bp-card-title"><span>01</span><div><h2>Add your source material</h2><p>One public repository and one resume.</p></div><button type="button" className="bp-example-button" onClick={demo}>Load example</button></div>
       <label htmlFor="resume-repo">PUBLIC GITHUB REPOSITORY</label><input id="resume-repo" className="bp-text-input" type="url" placeholder="https://github.com/owner/repository" value={repoUrl} onChange={(event) => setRepoUrl(event.target.value)} />
-      <div className="bp-input-tabs"><button type="button" className={inputType === "text" ? "active" : ""} onClick={() => setInputType("text")}>Paste resume text</button><button type="button" className={inputType === "pdf" ? "active" : ""} onClick={() => setInputType("pdf")}>Upload PDF</button></div>
-      {inputType === "text" ? <textarea className="bp-document-text" maxLength={50000} rows={10} placeholder="Paste resume text, including project and experience bullets…" value={resumeText} onChange={(event) => setResumeText(event.target.value)} /> : <label className="bp-file-drop"><Upload size={18} /><span>{pdf?.name ?? "Choose a text-based PDF (max 5 MB, 25 pages)"}</span><input type="file" accept="application/pdf,.pdf" onChange={(event) => setPdf(event.target.files?.[0])} /></label>}
+      <div className="bp-input-tabs"><button type="button" aria-pressed={inputType === "text"} className={inputType === "text" ? "active" : ""} onClick={() => setInputType("text")}>Paste resume text</button><button type="button" aria-pressed={inputType === "pdf"} className={inputType === "pdf" ? "active" : ""} onClick={() => setInputType("pdf")}>Upload PDF</button></div>
+      {inputType === "text" ? <><textarea className="bp-document-text" maxLength={50000} rows={10} placeholder="Paste resume text, including project and experience bullets…" value={resumeText} onChange={(event) => setResumeText(event.target.value)} /><small className="bp-char-count">{charCount(resumeText).toLocaleString()} / 50,000 characters</small></> : <label className="bp-file-drop"><Upload size={18} /><span>{pdf?.name ?? "Choose a text-based PDF (max 5 MB, 25 pages)"}</span><input type="file" accept="application/pdf,.pdf" onChange={(event) => setPdf(event.target.files?.[0])} /></label>}
       <div className="bp-disclosure"><LockKeyhole size={14} /><span>By submitting, your resume text and scanned public-repo evidence are sent to BharatCode first, with Gemini as fallback. BuildProof does not persist the document; extracted excerpts and results stay temporarily in service memory for retrieval.</span></div>
       <button className="analyze-button bp-submit" disabled={busy || !repoUrl.trim() || (inputType === "text" ? !resumeText.trim() : !pdf)} onClick={() => void run()}>{busy ? <><LoaderCircle size={15} className="spin" /> Analyzing claims</> : <>Check resume claims <ChevronDown size={15} /></>}</button>
       <DocumentProgress busy={busy} stage={stage} error={error} onRetry={() => void run()} />
@@ -138,7 +140,7 @@ export function NoticesMode() {
 
   return <main className="bp-mode-page"><section className="bp-mode-hero"><div className="eyebrow"><span className="eyebrow-line" />CAMPUS NOTICES · CHANGES WITH RECEIPTS</div><h1>Catch what<br /><em>changed.</em></h1><p>Paste notices or upload text-based PDFs. BuildProof extracts requirements and deadlines, compares versions in the order you provide, and links each result to its source.</p><div className="bp-mode-tags"><span><CheckCircle2 size={13} /> Manual comparison</span><span><CalendarDays size={13} /> Calendar export</span></div></section>
     <section className="bp-form-card"><div className="bp-card-title"><span>01</span><div><h2>Add notices, oldest to newest</h2><p>One notice extracts actions; multiple notices show changes and conflicts.</p></div><button type="button" className="bp-example-button" onClick={demo}>Load example</button></div>
-      <div className="bp-notice-editor-list">{textNotices.map((notice, index) => <article className="bp-notice-editor" key={index}><div className="bp-notice-editor-head"><label htmlFor={`notice-name-${index}`}>NOTICE {String(index + 1).padStart(2, "0")}</label>{textNotices.length > 1 && <button type="button" onClick={() => setTextNotices((old) => old.filter((_, i) => i !== index))}>Remove</button>}</div><input id={`notice-name-${index}`} className="bp-text-input" placeholder="Optional notice name or version" value={notice.name} onChange={(event) => setTextNotices((old) => old.map((item, i) => i === index ? { ...item, name: event.target.value } : item))} /><textarea className="bp-document-text" rows={5} maxLength={50000} placeholder="Paste the full notice text…" value={notice.text} onChange={(event) => setTextNotices((old) => old.map((item, i) => i === index ? { ...item, text: event.target.value } : item))} /></article>)}</div>
+      <div className="bp-notice-editor-list">{textNotices.map((notice, index) => <article className="bp-notice-editor" key={index}><div className="bp-notice-editor-head"><label htmlFor={`notice-name-${index}`}>NOTICE {String(index + 1).padStart(2, "0")}</label>{textNotices.length > 1 && <button type="button" onClick={() => setTextNotices((old) => old.filter((_, i) => i !== index))}>Remove</button>}</div><input id={`notice-name-${index}`} className="bp-text-input" placeholder="Optional notice name or version" value={notice.name} onChange={(event) => setTextNotices((old) => old.map((item, i) => i === index ? { ...item, name: event.target.value } : item))} /><textarea className="bp-document-text" rows={5} maxLength={50000} placeholder="Paste the full notice text…" value={notice.text} onChange={(event) => setTextNotices((old) => old.map((item, i) => i === index ? { ...item, text: event.target.value } : item))} /><small className="bp-char-count">{charCount(notice.text).toLocaleString()} / 50,000 characters</small></article>)}</div>
       {textNotices.length < 5 && <button type="button" className="bp-add-notice" onClick={() => setTextNotices((old) => [...old, emptyNotice()])}>+ Add another pasted notice</button>}
       <label className="bp-file-drop bp-notice-upload"><Upload size={18} /><span>{pdfs.length ? `${pdfs.length} PDF${pdfs.length === 1 ? "" : "s"} selected` : "Add text-based PDF notices (max 5 MB and 25 pages each)"}<small>PDFs are compared after pasted notices, in the order selected.</small></span><input type="file" accept="application/pdf,.pdf" multiple onChange={(event) => setPdfs(Array.from(event.target.files ?? []))} /></label>
       <div className="bp-disclosure"><LockKeyhole size={14} /><span>By submitting, notice text and extracted PDF lines are sent to BharatCode first, with Gemini as fallback. BuildProof does not persist the documents; extracted excerpts and results stay temporarily in service memory for retrieval.</span></div>
@@ -162,35 +164,7 @@ function NoticeResult({ result, id }: { result: NoticeReport; id: string }) {
 }
 
 function downloadCalendar(actions: NoticeAction[]) {
-  const escape = (value: string) => value.replaceAll("\\", "\\\\").replace(/\r\n|\r|\n/g, "\\n").replaceAll(";", "\\;").replaceAll(",", "\\,");
-  const foldLine = (line: string) => {
-    const encoder = new TextEncoder();
-    const parts: string[] = [];
-    let part = "";
-    let bytes = 0;
-    for (const character of line) {
-      const size = encoder.encode(character).length;
-      if (bytes + size > 75 && part) {
-        parts.push(part);
-        part = " ";
-        bytes = 1;
-      }
-      part += character;
-      bytes += size;
-    }
-    parts.push(part);
-    return parts.join("\r\n");
-  };
-  const stamp = new Date().toISOString().replaceAll("-", "").replaceAll(":", "").replace(/\.\d{3}/, "");
-  const events = actions.map((action, index) => {
-    const start = action.due_date.replaceAll("-", "");
-    const next = new Date(`${action.due_date}T00:00:00Z`); next.setUTCDate(next.getUTCDate() + 1);
-    const end = next.toISOString().slice(0, 10).replaceAll("-", "");
-    return ["BEGIN:VEVENT", `UID:buildproof-${stamp}-${index}@buildproof`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${start}`, `DTEND;VALUE=DATE:${end}`, `SUMMARY:${escape(action.action)}`, "END:VEVENT"];
-  });
-  const content = [["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//BuildProof//Campus Notices//EN"], ...events, ["END:VCALENDAR"]]
-    .flat().map(foldLine).join("\r\n");
-  downloadFile("buildproof-campus-actions.ics", content, "text/calendar;charset=utf-8");
+  downloadFile("buildproof-campus-actions.ics", buildCalendarIcs(actions), "text/calendar;charset=utf-8");
 }
 
 function downloadFile(filename: string, content: string, contentType: string) {
