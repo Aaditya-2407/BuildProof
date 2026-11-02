@@ -118,9 +118,15 @@ class RepoRef:
 
 
 def parse_repo_url(value: str) -> RepoRef:
-    parsed = urllib.parse.urlparse(value.strip())
-    if parsed.scheme not in ("https", "http") or parsed.hostname not in ("github.com", "www.github.com"):
+    try:
+        parsed = urllib.parse.urlparse(value.strip())
+        hostname = parsed.hostname
+    except ValueError:
+        raise ScanError("Enter a valid public GitHub repository URL.") from None
+    if parsed.scheme not in ("https", "http") or hostname not in ("github.com", "www.github.com"):
         raise ScanError("Enter a public GitHub repository URL, such as https://github.com/owner/repo.")
+    if parsed.username is not None or parsed.password is not None:
+        raise ScanError("Use a GitHub repository URL without embedded credentials.")
     parts = [p for p in parsed.path.strip("/").split("/") if p]
     if len(parts) != 2:
         raise ScanError("Use the main repository URL, not a file, branch, or pull request link.")

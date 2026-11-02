@@ -3,9 +3,11 @@ from __future__ import annotations
 import io
 import zipfile
 
+import pytest
+
 from app.analyzer import validate_citations
 from app import analyzer
-from app.scanner import build_fact_sheet, model_safe_fact_sheet, redact_secret_values, scan_archive
+from app.scanner import ScanError, build_fact_sheet, model_safe_fact_sheet, parse_repo_url, redact_secret_values, scan_archive
 
 
 def test_citation_validator_accepts_only_known_source_ranges():
@@ -53,6 +55,14 @@ def test_archive_filtering_skips_lockfiles_vendor_and_unsafe_paths():
     assert any(path == "app.py" for path in paths)
     assert not any("node_modules" in path or "package-lock" in path for path in paths)
     assert any(item["reason"] == "unsafe_path" for item in result["scan"]["files_skipped"])
+
+
+def test_repo_url_parser_rejects_malformed_hosts_and_embedded_credentials():
+    assert parse_repo_url("https://github.com/owner/repo.git").key == "owner/repo"
+    with pytest.raises(ScanError, match="valid public GitHub"):
+        parse_repo_url("https://[::1/owner/repo")
+    with pytest.raises(ScanError, match="without embedded credentials"):
+        parse_repo_url("https://student:token@github.com/owner/repo")
 
 
 def test_gemini_is_used_when_bharatcode_generation_fails(monkeypatch):
