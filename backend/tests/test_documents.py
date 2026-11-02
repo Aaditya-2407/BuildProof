@@ -6,6 +6,7 @@ import pytest
 from pypdf import PdfWriter
 
 from app import document_analyzers
+from app.document_analyzers import _date_supported_by_evidence
 from app.analyzer import ModelError, validate_citations
 from app.documents import DocumentError, pdf_document, text_document
 from app.scanner import build_fact_sheet
@@ -132,3 +133,41 @@ def test_notice_compare_validates_changes_conflicts_and_action_date(monkeypatch)
     assert result["changes"][0]["status"] == "changed"
     assert result["conflicts"] and result["actions"][0]["due_date"] == "2026-11-12"
     assert result["model_provider"] == "gemini"
+
+    unsupported_change = dict(mocked)
+    unsupported_change["changes"] = [dict(mocked["changes"][0], evidence_ids=[ids[1]])]
+    outputs = iter([unsupported_change, mocked])
+    attempts = []
+
+    def response_then_repair(*args, **kwargs):
+        attempts.append(1)
+        return dict(next(outputs))
+
+    monkeypatch.setattr(document_analyzers, "_request_model", response_then_repair)
+    repaired = document_analyzers.analyze_notices([earlier, later])
+    assert len(attempts) == 2
+    assert len(repaired["changes"][0]["evidence_ids"]) == 2
+
+
+def test_one_notice_can_compare_values_only_when_both_are_in_its_cited_line(monkeypatch):
+    notice = text_document("Amended notice", "The deadline changed from 2026-11-10 to 2026-11-12.", "notice_text", "N1-")
+    evidence_id = notice["evidence"][0]["id"]
+    response = {
+        "summary": "The notice states the old and new deadlines.", "notice_facts": [],
+        "changes": [{"topic": "deadline", "earlier_value": "2026-11-10", "later_value": "2026-11-12",
+                      "status": "changed", "evidence_ids": [evidence_id]}],
+        "conflicts": [], "actions": [], "_model_provider": "gemini",
+    }
+    monkeypatch.setattr(document_analyzers, "_request_model", lambda *args, **kwargs: dict(response))
+
+    result = document_analyzers.analyze_notices([notice])
+
+    assert result["changes"][0]["status"] == "changed"
+
+
+def test_notice_due_date_must_match_the_cited_line():
+    notice = text_document("Notice", "Application deadline: 10 November 2026.", "notice_text", "N1-")
+    assert _date_supported_by_evidence("2026-11-10", notice["evidence"])
+    assert not _date_supported_by_evidence("2026-11-11", notice["evidence"])
+    abbreviated = text_document("Abbreviated notice", "Deadline: Nov. 10, 2026", "notice_text", "N2-")
+    assert _date_supported_by_evidence("2026-11-10", abbreviated["evidence"])

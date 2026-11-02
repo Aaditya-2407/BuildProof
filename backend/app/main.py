@@ -5,8 +5,9 @@ import os
 import asyncio
 import json
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .analyzer import sample_report
@@ -15,12 +16,39 @@ from .jobs import get_cached_report, get_job, start_analysis, start_notice_analy
 from .scanner import ScanError, parse_repo_url
 
 app = FastAPI(title="BuildProof", version="0.2.0")
+MAX_REQUEST_BODY_BYTES = 28 * 1024 * 1024
+ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173",
+                   os.getenv("FRONTEND_ORIGIN", "https://buildproof.vercel.app")]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", os.getenv("FRONTEND_ORIGIN", "https://buildproof.vercel.app")],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["content-type"],
 )
+
+
+def _content_length_rejection(value: str | None, origin: str | None = None) -> JSONResponse | None:
+    headers = {"Access-Control-Allow-Origin": origin, "Vary": "Origin"} if origin in ALLOWED_ORIGINS else None
+    if value is None:
+        return None
+    try:
+        size = int(value)
+    except ValueError:
+        return JSONResponse({"detail": "Invalid Content-Length header."}, status_code=400, headers=headers)
+    if size < 0:
+        return JSONResponse({"detail": "Invalid Content-Length header."}, status_code=400, headers=headers)
+    if size > MAX_REQUEST_BODY_BYTES:
+        return JSONResponse({"detail": "This request exceeds the 28 MB upload limit. Reduce PDF sizes and try again."}, status_code=413, headers=headers)
+    return None
+
+
+@app.middleware("http")
+async def limit_request_body(request: Request, call_next):
+    if request.method == "POST":
+        rejection = _content_length_rejection(request.headers.get("content-length"), request.headers.get("origin"))
+        if rejection is not None:
+            return rejection
+    return await call_next(request)
 
 
 class AnalyzeRequest(BaseModel):

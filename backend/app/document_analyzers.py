@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import datetime as dt
 import json
 from typing import Any
@@ -76,6 +77,28 @@ def _repository_evidence(fact_sheet: dict[str, Any], safe_sheet: dict[str, Any])
 
 def _valid_cited_result(result: dict[str, Any], evidence: dict[str, dict[str, Any]]) -> tuple[bool, str | None]:
     return validate_citations(result, evidence)
+
+
+def _date_supported_by_evidence(value: str, evidence_items: list[dict[str, Any]]) -> bool:
+    try:
+        parsed = dt.date.fromisoformat(value)
+    except ValueError:
+        return False
+    month = calendar.month_name[parsed.month]
+    short_month = calendar.month_abbr[parsed.month]
+    suffix = "th" if 11 <= parsed.day % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(parsed.day % 10, "th")
+    variants = {
+        parsed.isoformat(), f"{parsed.year}/{parsed.month:02d}/{parsed.day:02d}",
+        f"{parsed.day} {month} {parsed.year}", f"{parsed.day}{suffix} {month} {parsed.year}",
+        f"{month} {parsed.day} {parsed.year}", f"{month} {parsed.day}{suffix} {parsed.year}",
+        f"{parsed.day} {short_month} {parsed.year}", f"{parsed.day}{suffix} {short_month} {parsed.year}",
+        f"{short_month} {parsed.day} {parsed.year}", f"{short_month} {parsed.day}{suffix} {parsed.year}",
+    }
+    def normalize(text: str) -> str:
+        return " ".join(text.casefold().replace(",", " ").replace(".", " ").split())
+
+    source_text = " ".join(normalize(item["excerpt"]) for item in evidence_items)
+    return any(normalize(variant) in source_text for variant in variants)
 
 
 def audit_resume(fact_sheet: dict[str, Any], resume: dict[str, Any]) -> dict[str, Any]:
@@ -169,6 +192,20 @@ NOTICES:
                 if not valid:
                     break
         if valid:
+            for change in result["changes"]:
+                cited = [allowed[eid] for eid in change["evidence_ids"]]
+                cited_sources = {item.get("source_id") for item in cited}
+                if len(documents) > 1 and change["status"] in {"changed", "conflict"} and len(cited_sources) < 2:
+                    valid, validation_error = False, "a between-notice change did not cite both source notices"
+                    break
+                if len(documents) == 1:
+                    cited_text = " ".join(" ".join(item["excerpt"].casefold().split()) for item in cited)
+                    earlier = " ".join(change["earlier_value"].casefold().split())
+                    later = " ".join(change["later_value"].casefold().split())
+                    if not earlier or not later or earlier not in cited_text or later not in cited_text:
+                        valid, validation_error = False, "a single-notice change did not cite evidence for both values"
+                        break
+        if valid:
             for action in result["actions"]:
                 due_date = action["due_date"]
                 if due_date:
@@ -177,6 +214,10 @@ NOTICES:
                             raise ValueError
                     except ValueError:
                         valid, validation_error = False, "an action due date was not a valid ISO calendar date"
+                        break
+                    cited_items = [allowed[eid] for eid in action["evidence_ids"]]
+                    if not _date_supported_by_evidence(due_date, cited_items):
+                        valid, validation_error = False, "an action due date was not present in its cited source lines"
                         break
         if valid:
             break

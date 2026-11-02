@@ -29,11 +29,16 @@ SKIP_FILES = {
     "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lockb", "poetry.lock",
     "uv.lock", "pipfile.lock", "cargo.lock", "composer.lock", "gemfile.lock",
 }
+OTHER_SOURCE_LANGUAGES = {
+    ".go": "Go", ".rs": "Rust", ".java": "Java", ".php": "PHP", ".rb": "Ruby",
+    ".cs": "C#", ".cpp": "C++", ".c": "C", ".h": "C/C++ header", ".hpp": "C++",
+}
+OTHER_SOURCE_SUFFIXES = set(OTHER_SOURCE_LANGUAGES)
 TEXT_SUFFIXES = {
     ".py", ".pyi", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".json",
     ".toml", ".yaml", ".yml", ".md", ".txt", ".html", ".ini", ".cfg", ".env",
     ".example", ".sh", ".sql", ".xml", ".properties",
-}
+} | OTHER_SOURCE_SUFFIXES
 TEXT_NAMES = {
     "dockerfile", "makefile", "procfile", ".env", ".env.example", ".gitignore",
     "requirements.txt", "pyproject.toml", "package.json", "readme", "bharatcode.txt",
@@ -335,12 +340,14 @@ def build_fact_sheet(files: dict[str, str], skipped: list[dict[str, Any]], meta:
         if suffix == ".py": languages.add("Python")
         elif suffix in {".js", ".jsx", ".mjs", ".cjs"}: languages.add("JavaScript")
         elif suffix in {".ts", ".tsx"}: languages.add("TypeScript")
-        elif suffix in {".go", ".rs", ".java", ".php", ".rb", ".cs", ".cpp", ".c"}: languages.add("Other")
+        elif suffix in OTHER_SOURCE_LANGUAGES: languages.add(OTHER_SOURCE_LANGUAGES[suffix])
 
         name = PurePosixPath(path).name.lower()
         lines = text.splitlines()
         if name in {"readme.md", "readme.txt", "readme"} or suffix in {".md", ".txt"}:
             docs.append((path, text))
+        if suffix in OTHER_SOURCE_SUFFIXES and lines:
+            add_evidence(path, 1, min(8, len(lines)), "code_signal", "generic_source_excerpt")
 
         # Secret patterns are reported as redacted locations only. No raw secret is retained in output.
         for line_num, line in enumerate(lines, 1):

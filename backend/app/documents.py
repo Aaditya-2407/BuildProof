@@ -53,6 +53,7 @@ def _make_document(
                 "path": name,
                 "source_name": name,
                 "source_type": source_type,
+                "source_id": prefix.rstrip("-"),
                 "page_number": page_index if len(pages) > 1 or source_type.endswith("_pdf") else None,
                 "page_count": len(pages) if source_type.endswith("_pdf") else None,
                 "line_start": line_index,

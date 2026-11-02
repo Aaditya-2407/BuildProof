@@ -8,7 +8,7 @@ BuildProof helps students prepare for judges, support resume claims with project
 
 - **Defend a repo:** Scan a public GitHub repository for its stack, routes, entry points, integrations, documentation signals, and likely secrets. Get an architecture overview, five judge questions, and a three-question practice round.
 - **Prove resume claims:** Compare pasted resume text or a text-based PDF with one public GitHub repository. Claims are marked supported, partly supported, or not found in scanned scope; suggested wording never adds unsupported facts or metrics.
-- **Track campus notices:** Paste notice text or upload text-based PDFs. Extract deadlines, eligibility, and actions; compare documents in the order provided; flag changes and conflicts; export dated actions as an `.ics` calendar file.
+- **Track campus notices:** Paste notice text or upload text-based PDFs. Extract deadlines only when the cited text supports the date, compare documents in the order provided, flag changes and conflicts with source evidence, and export dated actions as an `.ics` calendar file.
 
 All modes use a shared evidence registry. Repository citations point to file lines; document citations point to source name, page, and line. BharatCode Qwen 3.8 27B is tried first, with Google Gemini 3.5 Flash-Lite as fallback. Configure `GEMINI_API_KEY` to enable fallback, or use Gemini alone by leaving `BHARATCODE_API_KEY` empty.
 
@@ -49,7 +49,7 @@ Render free services can spin down. In-memory jobs and caches are lost on restar
 
 - Repository analysis accepts public GitHub repositories only. Archives are capped at 20 MB compressed and 10 MB uncompressed; at most 300 text files and 256 KB per file are scanned.
 - Resume mode uses one public repository. Pasted documents are limited to 50,000 characters. PDFs must contain selectable text and be at most 5 MB and 25 pages. Image-only PDFs are not OCR'd.
-- Notice mode accepts up to five documents per analysis, with the same text and PDF limits. It compares only the notices submitted by the user; it does not monitor campus sites.
+- Notice mode accepts up to five documents per analysis, with the same text and PDF limits. Requests declaring more than 28 MB are rejected before parsing. It compares only the notices submitted by the user; it does not monitor campus sites.
 - Submitted resume and notice text, plus selected repository evidence, are sent to the configured model provider. The UI discloses this before submission. BuildProof does not write these documents to a database or hosted report; extracted evidence and results remain temporarily in backend process memory for job retrieval.
 - Resume email and phone patterns and likely code secrets are redacted before model use. Detection is heuristic. Review exported excerpts before sharing.
 - Source code is treated as untrusted text and is never executed. Model outputs must pass citation validation before display.
